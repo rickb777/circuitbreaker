@@ -2,6 +2,7 @@ package circuit
 
 import (
 	"fmt"
+	"net/http"
 
 	"github.com/peterbourgon/g2s"
 
@@ -66,12 +67,13 @@ func ExampleHTTPClient() {
 	// breaker will trip with the same behavior as ThresholdBreaker.
 	client := NewHTTPClient(time.Second*5, 10, nil)
 
-	resp, err := client.Get("http://example.com/resource.json")
+	req, _ := http.NewRequest(http.MethodGet, "http://example.com/resource.json", nil)
+	resp, err := client.Do(req)
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer resp.Body.Close()
 	resource, err := ioutil.ReadAll(resp.Body)
-	resp.Body.Close()
 	if err != nil {
 		log.Fatal(err)
 	}

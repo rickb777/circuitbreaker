@@ -1,11 +1,14 @@
 package circuit
 
 import (
-	"io"
 	"net/http"
 	"net/url"
 	"time"
 )
+
+type Client interface {
+	Do(req *http.Request) (*http.Response, error)
+}
 
 // HTTPClient is a wrapper around http.Client that provides circuit breaker capabilities.
 //
@@ -13,7 +16,7 @@ import (
 // provided to allow different breakers to be used based on the circumstance. See the
 // implementation of NewHostBasedHTTPClient for an example of this.
 type HTTPClient struct {
-	Client         *http.Client
+	Client         Client
 	BreakerTripped func()
 	BreakerReset   func()
 	BreakerLookup  func(*HTTPClient, interface{}) *Breaker
@@ -24,18 +27,18 @@ type HTTPClient struct {
 var defaultBreakerName = "_default"
 
 // NewHTTPClient provides a circuit breaker wrapper around http.Client.
-// It wraps all of the regular http.Client functions. Specifying 0 for timeout will
+// It wraps the Client interface. Specifying 0 for timeout will
 // give a breaker that does not check for time outs.
-func NewHTTPClient(timeout time.Duration, threshold int64, client *http.Client) *HTTPClient {
+func NewHTTPClient(timeout time.Duration, threshold int64, client Client) *HTTPClient {
 	breaker := NewThresholdBreaker(threshold)
 	return NewHTTPClientWithBreaker(breaker, timeout, client)
 }
 
-// NewHostBasedHTTPClient provides a circuit breaker wrapper around http.Client. This
+// NewHostBasedHTTPClient provides a circuit breaker wrapper around Client. This
 // client will use one circuit breaker per host parsed from the request URL. This allows
 // you to use a single HTTPClient for multiple hosts with one host's breaker not affecting
 // the other hosts.
-func NewHostBasedHTTPClient(timeout time.Duration, threshold int64, client *http.Client) *HTTPClient {
+func NewHostBasedHTTPClient(timeout time.Duration, threshold int64, client Client) *HTTPClient {
 	brclient := NewHTTPClient(timeout, threshold, client)
 
 	brclient.BreakerLookup = func(c *HTTPClient, val interface{}) *Breaker {
@@ -61,7 +64,7 @@ func NewHostBasedHTTPClient(timeout time.Duration, threshold int64, client *http
 
 // NewHTTPClientWithBreaker provides a circuit breaker wrapper around http.Client.
 // It wraps all of the regular http.Client functions using the provided Breaker.
-func NewHTTPClientWithBreaker(breaker *Breaker, timeout time.Duration, client *http.Client) *HTTPClient {
+func NewHTTPClientWithBreaker(breaker *Breaker, timeout time.Duration, client Client) *HTTPClient {
 	if client == nil {
 		client = &http.Client{}
 	}
@@ -94,56 +97,9 @@ func (c *HTTPClient) Do(req *http.Request) (*http.Response, error) {
 	var resp *http.Response
 	var err error
 	breaker := c.breakerLookup(req.URL.String())
-	err = breaker.Call(func() error {
+	ctx := req.Context()
+	err = breaker.CallContext(ctx, func() error {
 		resp, err = c.Client.Do(req)
-		return err
-	}, c.timeout)
-	return resp, err
-}
-
-// Get wraps http.Client Get()
-func (c *HTTPClient) Get(url string) (*http.Response, error) {
-	var resp *http.Response
-	breaker := c.breakerLookup(url)
-	err := breaker.Call(func() error {
-		aresp, err := c.Client.Get(url)
-		resp = aresp
-		return err
-	}, c.timeout)
-	return resp, err
-}
-
-// Head wraps http.Client Head()
-func (c *HTTPClient) Head(url string) (*http.Response, error) {
-	var resp *http.Response
-	breaker := c.breakerLookup(url)
-	err := breaker.Call(func() error {
-		aresp, err := c.Client.Head(url)
-		resp = aresp
-		return err
-	}, c.timeout)
-	return resp, err
-}
-
-// Post wraps http.Client Post()
-func (c *HTTPClient) Post(url string, bodyType string, body io.Reader) (*http.Response, error) {
-	var resp *http.Response
-	breaker := c.breakerLookup(url)
-	err := breaker.Call(func() error {
-		aresp, err := c.Client.Post(url, bodyType, body)
-		resp = aresp
-		return err
-	}, c.timeout)
-	return resp, err
-}
-
-// PostForm wraps http.Client PostForm()
-func (c *HTTPClient) PostForm(url string, data url.Values) (*http.Response, error) {
-	var resp *http.Response
-	breaker := c.breakerLookup(url)
-	err := breaker.Call(func() error {
-		aresp, err := c.Client.PostForm(url, data)
-		resp = aresp
 		return err
 	}, c.timeout)
 	return resp, err

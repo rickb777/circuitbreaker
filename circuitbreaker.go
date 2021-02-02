@@ -41,6 +41,9 @@ import (
 	"github.com/facebookgo/clock"
 )
 
+// using github.com/rickb777/enumeration/v2
+//go:generate enumeration -i circuitbreaker.go -package circuit -type BreakerEvent
+
 // BreakerEvent indicates the type of event received over an event channel
 type BreakerEvent int
 
@@ -49,13 +52,13 @@ const (
 	BreakerTripped BreakerEvent = iota
 
 	// BreakerReset is sent when a breaker resets
-	BreakerReset BreakerEvent = iota
+	BreakerReset
 
 	// BreakerFail is sent when Fail() is called
-	BreakerFail BreakerEvent = iota
+	BreakerFail
 
 	// BreakerReady is sent when the breaker enters the half open state and is ready to retry
-	BreakerReady BreakerEvent = iota
+	BreakerReady
 )
 
 // ListenerEvent includes a reference to the circuit breaker and the event.
@@ -301,8 +304,8 @@ func (cb *Breaker) Success() {
 	cb.nextBackOff = cb.BackOff.NextBackOff()
 	cb.backoffLock.Unlock()
 
-	state := cb.state()
-	if state == halfopen {
+	st := cb.state()
+	if st == halfopen {
 		cb.Reset()
 	}
 	atomic.StoreInt64(&cb.consecFailures, 0)
@@ -319,12 +322,12 @@ func (cb *Breaker) ErrorRate() float64 {
 // It will be ready if the breaker is in a reset state, or if it is time to retry
 // the call for auto resetting.
 func (cb *Breaker) Ready() bool {
-	state := cb.state()
-	if state == halfopen {
+	st := cb.state()
+	if st == halfopen {
 		atomic.StoreInt64(&cb.halfOpens, 0)
 		cb.sendEvent(BreakerReady)
 	}
-	return state == closed || state == halfopen
+	return st == closed || st == halfopen
 }
 
 // Call wraps a function the Breaker will protect. A failure is recorded
@@ -360,15 +363,23 @@ func (cb *Breaker) CallContext(ctx context.Context, circuit func() error, timeou
 		}
 	}
 
-	if err != nil {
-		if ctx.Err() != context.Canceled {
-			cb.Fail()
-		}
-		return err
+	if err == nil {
+		cb.Success()
+		return nil
 	}
 
-	cb.Success()
-	return nil
+	switch ctx.Err() {
+	case context.Canceled:
+	case context.DeadlineExceeded:
+		// If the breaker timed out as well, report that,
+		// otherwise consider it "neutral".
+		if err == ErrBreakerTimeout {
+			cb.Fail()
+		}
+	default:
+		cb.Fail()
+	}
+	return err
 }
 
 // state returns the state of the TrippableBreaker. The states available are:

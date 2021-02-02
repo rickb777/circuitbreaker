@@ -18,12 +18,14 @@ You can read more about this pattern and how it's used at:
 - [The Netflix Tech Blog](http://techblog.netflix.com/2012/02/fault-tolerance-in-high-volume.html)
 - [Release It!](http://pragprog.com/book/mnee/release-it)
 
-[![GoDoc](https://godoc.org/github.com/rubyist/circuitbreaker?status.svg)](https://godoc.org/github.com/rubyist/circuitbreaker)
+[![GoDoc](https://godoc.org/github.com/rickb777/circuitbreaker?status.svg)](https://godoc.org/github.com/rickb777/circuitbreaker)
+
+This repo is a [clean fork from rubyist](https://github.com/rubyist/circuitbreaker). It has a different API and will not be merged back.
 
 ## Installation
 
 ```
-  go get github.com/rubyist/circuitbreaker
+  go get github.com/rickb777/circuitbreaker
 ```
 
 ## Examples
@@ -117,4 +119,4 @@ See the godoc for more examples.
 
 ## Bugs, Issues, Feedback
 
-Right here on GitHub: [https://github.com/rubyist/circuitbreaker](https://github.com/rubyist/circuitbreaker)
+Right here on GitHub: [https://github.com/rickb777/circuitbreaker](https://github.com/rickb777/circuitbreaker)
